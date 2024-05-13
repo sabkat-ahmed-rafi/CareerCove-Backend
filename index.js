@@ -17,7 +17,7 @@ app.use(
   })
 );
 
-const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const apiKey = process.env.CLOUDINARY_API_KEY;
 const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
@@ -59,76 +59,157 @@ async function run() {
     // await client.connect();
 
     const database = client.db("CareerCove");
-    const user = database.collection("user"); 
-    const allJobs = database.collection("allJobs"); 
-    const appliedJobs = database.collection("appliedJobs"); 
+    const user = database.collection("user");
+    const allJobs = database.collection("allJobs");
+    const appliedJobs = database.collection("appliedJobs");
 
-    // Showing user in the UI 
-    app.get("/user" , async(req, res) => {
-        const result = await user.find().toArray();
-        res.send(result);
-    })
+    // Showing user in the UI
+    app.get("/user", async (req, res) => {
+      const result = await user.find().toArray();
+      res.send(result);
+    });
 
     // Showing all jobs in the UI
     app.get("/allJobs", async (req, res) => {
-      const search = req.query.search
-      const query = { title: {$regex: search, $options: "i"}}
+      const search = req.query.search;
+      const email = req.query.email;
+      const onSite = req.query.onSite;
+      const remote = req.query.remote
+      const hybrid = req.query.hybrid
+      const partTime = req.query.partTime
+
+      if (search) {
+        const query = { title: { $regex: search, $options: "i" } };
         const result = await allJobs.find(query).toArray();
         res.send(result);
-    })
+      } else if (email) {
+        const query = { email: email };
+        const result = await allJobs.find(query).toArray();
+        res.send(result);
+      } else if (onSite) {
+        const query = { jobOption: onSite };
+        const result = await allJobs.find(query).toArray();
+        res.send(result);
+      } else if (remote) {
+        const query = { jobOption: remote };
+        const result = await allJobs.find(query).toArray();
+        res.send(result);
+      } else if (hybrid) {
+        const query = { jobOption: hybrid };
+        const result = await allJobs.find(query).toArray();
+        res.send(result);
+      } else if (partTime) {
+        const query = { jobOption: partTime };
+        const result = await allJobs.find(query).toArray();
+        res.send(result);
+      }  else {
+        const result = await allJobs.find({}).toArray();
+        res.send(result);
+      }
+    });
 
     // Showing Single job post in the UI
     app.get("/allJobs/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) }
+      const query = { _id: new ObjectId(id) };
       const result = await allJobs.findOne(query);
       res.send(result);
-    })
+    });
+
+    // showing single route for update a job
+    app.get("/updateJobs/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await allJobs.findOne(query);
+      res.send(result);
+    });
 
     // Showing applied jobs in the UI
     app.get("/appliedJobs", async (req, res) => {
-      const result = await appliedJobs.find().toArray();
+      const filter = req.query.filter;
+      let query = {};
+      if (filter) query = { jobOption: filter };
+      const result = await appliedJobs.find(query).toArray();
       res.send(result);
-    })
+    });
 
-    // Saving user info in the Database Using Cloudinary and Multer 
+    // Saving user info in the Database Using Cloudinary and Multer
     app.post("/user", upload.single("photo"), async (req, res) => {
-        try {
-          const { name, email } = req.body;
-          const photo = req.file.path;
-  
-          const result = await cloudinary.uploader.upload(photo);
-  
-          const photoUrl = result.secure_url;
-          const userResult = await user.insertOne({ name, email, photoUrl });
-          res.send(userResult);
-        } catch (error) {
-          console.error(error);
-          res.status(500).send("Error uploading image");
-        }
+      try {
+        const { name, email } = req.body;
+        const photo = req.file.path;
+
+        const result = await cloudinary.uploader.upload(photo);
+
+        const photoUrl = result.secure_url;
+        const userResult = await user.insertOne({ name, email, photoUrl });
+        res.send(userResult);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send("Error uploading image");
+      }
+    });
+
+    // Save job post to the database
+    app.post("/allJobs", async (req, res) => {
+      const jobInfo = req.body;
+      const result = await allJobs.insertOne(jobInfo);
+      res.send(result);
+    });
+
+    // Saving applied jobs on database
+    app.post("/appliedJobs", async (req, res) => {
+      const { _id } = req.body.appliedJobsInfo;
+      const jobId = _id;
+      const updateApplicantResult = await allJobs.updateOne(
+        { _id: new ObjectId(jobId) },
+        { $inc: { applicantNumber: 1 } }
+      );
+      const {
+        title,
+        photo,
+        description,
+        salary,
+        jobDeadline,
+        jobOption,
+        postDate,
+        applyerName,
+        applyerEmail,
+        cv,
+      } = req.body.appliedJobsInfo;
+
+      const appliedJobsResult = await appliedJobs.insertOne({
+        title,
+        photo,
+        description,
+        salary,
+        jobDeadline,
+        jobOption,
+        postDate,
+        applyerName,
+        applyerEmail,
+        cv,
       });
+      res.send();
+    });
 
-      // Save job post to the database 
-      app.post("/allJobs", async (req, res) => {
-        const jobInfo = req.body
-        const result = await allJobs.insertOne(jobInfo)
-        res.send(result)
-      })
+    // make route for update a job
+    app.put("/updateJobs/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id, req.body);
+      const updateResult = await allJobs.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: req.body }
+      );
+      res.send(updateResult);
+    });
 
-      // Saving applied jobs on database 
-      app.post("/appliedJobs", async (req, res) => {
-        const {_id} = req.body.appliedJobsInfo
-        const jobId = _id
-        const updateApplicantResult = await allJobs.updateOne(
-          {_id: new ObjectId(jobId)},
-          {$inc: {applicantNumber: 1 }}
-        )
-        const {title, photo, description, salary, jobDeadline, jobOption, postDate, applyerName, applyerEmail, cv } = req.body.appliedJobsInfo 
-
-        const appliedJobsResult = await appliedJobs.insertOne({title, photo, description, salary, jobDeadline, jobOption, postDate, applyerName, applyerEmail, cv })
-        res.send()
-      })
-
+    // Made a route for delete
+    app.delete("/allJobs/:id", async (req, res) => {
+      const id = req.params.id;
+      const deleteResult = await allJobs.deleteOne({ _id: new ObjectId(id) });
+      res.send(deleteResult);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
