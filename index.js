@@ -1,6 +1,8 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cloudinary = require("cloudinary").v2;
 const multer = require("multer");
+const jwt = require("jsonwebtoken");
+var cookieParser = require('cookie-parser')
 const express = require("express");
 require("dotenv").config();
 const cors = require("cors");
@@ -8,6 +10,8 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
 app.use(express.json());
+app.use(cookieParser());
+
 
 app.use(
   cors({
@@ -16,6 +20,24 @@ app.use(
     credentials: true,
   })
 );
+
+const verifyToken = async (req, res, next) => {
+  const token = req.cookies?.token
+  if(!token){
+    return res.status(401).json({
+      message: "You are not logged in!",
+    });
+  }
+  jwt.verify(token, process.env.TOKEN, (err, decoded) => {
+    if(err){
+      return res.status(401).json({
+        message: "You are not logged in!",
+      });
+    }
+    req.user = decoded
+    next()
+  })
+}
 
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const apiKey = process.env.CLOUDINARY_API_KEY;
@@ -70,7 +92,16 @@ async function run() {
     });
 
     // Showing all jobs in the UI
-    app.get("/allJobs", async (req, res) => {
+    app.get("/allJobs",verifyToken, async (req, res) => {
+      console.log(req.user.email)
+      console.log(req.body.email)
+
+      // if(req.user.email !== req.query.email){
+      //   return res.status(401).json({
+      //     message: "You are not logged in!",
+      //   });
+      // }
+
       const search = req.query.search;
       const email = req.query.email;
       const onSite = req.query.onSite;
@@ -211,11 +242,27 @@ async function run() {
       res.send(deleteResult);
     });
 
+    app.post("/jwt", async (req, res) => {
+      const user = req.body
+      const token = jwt.sign(user, process.env.TOKEN, {expiresIn: "24h"})
+
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      }).send({success: true})
+    })
+
+    app.post('/logout', (req, res) => {
+      const user = req.body
+      res.clearCookie('token', {maxAge: 0}).send({success: true})
+    })
+
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
